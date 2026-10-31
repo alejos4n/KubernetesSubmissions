@@ -18,4 +18,4 @@ This repo was created while taking "Devops with Kubernetes" course, that is prov
 
 ### 3. Introduction to Networking
 
-- [Exercise 1.05: Project v0.3](https://github.com/VikSil/DevOps_with_Kubernetes/tree/trunk/Part1/Exercise_1.05)
+- [Exercise 1.05: Project v0.3](https://github.com/alejos4n/KubernetesSubmissions/tree/1.5)
