@@ -7,3 +7,6 @@ This repo was created while taking "Devops with Kubernetes" course, that is prov
 ### 1. First Deploy
 
 - [Exercise 1.01: Getting started](https://github.com/alejos4n/KubernetesSubmissions/releases/tag/1.1)
+- [Exercise 1.02: Project v.0.1](https://github.com/alejos4n/KubernetesSubmissions/tree/1.2)
+- [Exercise 1.03: Declarative approach]
+- [Exercise 1.04: Project v0.2])
