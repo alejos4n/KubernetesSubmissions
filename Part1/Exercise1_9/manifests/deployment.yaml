@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: ping-pong
-          image: alejosan/exercise1-9-ping-pong:latest
+          image: alejosan/pingpong:1.9
           imagePullPolicy: Always
           ports:
             - name: http

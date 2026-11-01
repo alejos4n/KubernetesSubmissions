@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: todo-app
-          image: alejosan/todo-app:latest
+          image: alejosan/todo-app:1.2
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
