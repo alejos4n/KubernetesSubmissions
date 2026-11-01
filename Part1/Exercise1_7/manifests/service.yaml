@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: log-output
+spec:
+  selector:
+    app: log-output
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
