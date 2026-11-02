@@ -27,6 +27,6 @@ This repo was created while taking "Devops with Kubernetes" course, that is prov
 ### 4. Introduction to Storage
 
 - [Exercise 1.10: Even more services](https://github.com/alejos4n/KubernetesSubmissions/tree/1.10)
-- [Exercise 1.11: Persisting data](https://github.com/alejos4n/KubernetesSubmissions/tree/1.10)
+- [Exercise 1.11: Persisting data](https://github.com/alejos4n/KubernetesSubmissions/tree/1.11)
 - [Exercise 1.12: Project v0.6](https://github.com/alejos4n/KubernetesSubmissions/tree/1.10)
 - [Exercise 1.13: Project v0.7](https://github.com/alejos4n/KubernetesSubmissions/tree/1.10)
