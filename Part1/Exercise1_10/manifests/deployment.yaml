@@ -16,14 +16,14 @@ spec:
         fsGroup: 65532
       containers:
         - name: log-writer
-          image: alejosan/log-output:latest
+          image: alejosan/log-output:1.10
           imagePullPolicy: Always
           args: ["writer"]
           volumeMounts:
             - name: log-data
               mountPath: /data
         - name: log-server
-          image: alejosan/log-output:latest
+          image: alejosan/log-output:1.10
           imagePullPolicy: Always
           args: ["server"]
           ports:

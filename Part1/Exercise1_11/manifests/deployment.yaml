@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ping-pong
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ping-pong
+  template:
+    metadata:
+      labels:
+        app: ping-pong
+    spec:
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: ping-pong
+          image: alejosan/pingpong:1.11
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: pingpong-log-output-claim
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-output
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: log-output
+  template:
+    metadata:
+      labels:
+        app: log-output
+    spec:
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: log-writer
+          image: alejosan/log-output:1.11
+          imagePullPolicy: Always
+          args: ["writer"]
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+        - name: log-server
+          image: alejosan/log-output:1.11
+          imagePullPolicy: Always
+          args: ["server"]
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+              readOnly: true
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: pingpong-log-output-claim

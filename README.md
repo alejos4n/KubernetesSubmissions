@@ -20,3 +20,13 @@ This repo was created while taking "Devops with Kubernetes" course, that is prov
 
 - [Exercise 1.05: Project v0.3](https://github.com/alejos4n/KubernetesSubmissions/tree/1.5)
 - [Exercise 1.06: Project v0.4](https://github.com/alejos4n/KubernetesSubmissions/tree/1.6)
+- [Exercise 1.07: External access with Ingress](https://github.com/alejos4n/KubernetesSubmissions/tree/1.7)
+- [Exercise 1.08: Project v0.5](https://github.com/alejos4n/KubernetesSubmissions/tree/1.8)
+- [Exercise 1.09: More services](https://github.com/alejos4n/KubernetesSubmissions/tree/1.9)
+
+### 4. Introduction to Storage
+
+- [Exercise 1.10: Even more services](https://github.com/alejos4n/KubernetesSubmissions/tree/1.10)
+- [Exercise 1.11: Persisting data](https://github.com/alejos4n/KubernetesSubmissions/tree/1.10)
+- [Exercise 1.12: Project v0.6](https://github.com/alejos4n/KubernetesSubmissions/tree/1.10)
+- [Exercise 1.13: Project v0.7](https://github.com/alejos4n/KubernetesSubmissions/tree/1.10)
