@@ -30,3 +30,32 @@ This repo was created while taking "Devops with Kubernetes" course, that is prov
 - [Exercise 1.11: Persisting data](https://github.com/alejos4n/KubernetesSubmissions/tree/1.11)
 - [Exercise 1.12: Project v0.6](https://github.com/alejos4n/KubernetesSubmissions/tree/1.12)
 - [Exercise 1.13: Project v0.7](https://github.com/alejos4n/KubernetesSubmissions/tree/1.13)
+
+
+
+## Part 2
+
+### 1. Networking between pods
+
+- [Exercise 2.01: Connecting pods](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+- [Exercise 2.02: Project v1.0](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+
+### 2. Organizing a cluster
+
+- [Exercise 2.03: Keep them separated](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+- [Exercise 2.04: Project v1.1](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+
+### 3. Configuring applications
+
+- [Exercise 2.05: Secrets](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+- [Exercise 2.06: Documentation and ConfigMaps](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+
+### 4. StatefulSets and Jobs
+
+- [Exercise 2.07: Stateful applications](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+- [Exercise 2.08: Project v1.2](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+- [Exercise 2.09: Daily todos](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+
+### 5. Monitoring
+
+- [Exercise 2.10: Project v1.3](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
