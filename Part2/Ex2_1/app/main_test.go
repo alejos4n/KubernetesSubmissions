@@ -1,62 +1,45 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
 )
 
-func TestHomePageHasLimitedTodoInputAndHardcodedTodos(t *testing.T) {
-	for _, expected := range []string{
-		`<input id="todo" name="todo" type="text" maxlength="140" required>`,
-		`<button type="button">Send</button>`,
-		"<h2>Todos</h2>",
-		"<li>Read the Kubernetes documentation</li>",
-		"<li>Build a useful todo app</li>",
-		`<img src="/image"`,
-	} {
-		if !strings.Contains(homePage, expected) {
-			t.Errorf("home page does not contain %q", expected)
+func TestLogOutputFetchesPingPongCount(t *testing.T) {
+	pingPong := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/pings" {
+			t.Errorf("unexpected Ping-pong request: %s %s", r.Method, r.URL.Path)
 		}
+		w.Write([]byte("3\n"))
+	}))
+	defer pingPong.Close()
+
+	output, err := newLogOutput(pingPong.URL + "/pings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	output.serveHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), output.latestLine()+"\nPing / Pongs: 3\n") {
+		t.Fatalf("unexpected response: %q", recorder.Body.String())
 	}
 }
 
-func TestImageCacheRefreshesAfterServingExpiredImageOnce(t *testing.T) {
-	var fetches atomic.Int32
-	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fetch := fetches.Add(1)
-		fmt.Fprintf(w, "image-%d", fetch)
-	}))
-	defer imageServer.Close()
-
-	now := time.Date(2026, time.November, 2, 0, 0, 0, 0, time.UTC)
-	cacheDir := filepath.Join(t.TempDir(), "cache")
-	cache := newImageCache(cacheDir, imageServer.URL)
-	cache.now = func() time.Time { return now }
-
-	image, stale, err := cache.get()
-	if err != nil || stale || string(image) != "image-1" {
-		t.Fatalf("initial get = (%q, %t, %v), want image-1, fresh, nil", image, stale, err)
+func TestLogOutputReportsPingPongUnavailable(t *testing.T) {
+	output, err := newLogOutput("http://127.0.0.1:1/pings")
+	if err != nil {
+		t.Fatal(err)
 	}
+	recorder := httptest.NewRecorder()
+	output.serveHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 
-	now = now.Add(imageTTL)
-	cacheAfterRestart := newImageCache(cacheDir, imageServer.URL)
-	cacheAfterRestart.now = func() time.Time { return now }
-	image, stale, err = cacheAfterRestart.get()
-	if err != nil || !stale || string(image) != "image-1" {
-		t.Fatalf("first expired get = (%q, %t, %v), want image-1, stale, nil", image, stale, err)
-	}
-
-	image, stale, err = cacheAfterRestart.get()
-	if err != nil || stale || string(image) != "image-2" {
-		t.Fatalf("second expired get = (%q, %t, %v), want image-2, fresh, nil", image, stale, err)
-	}
-	if got := fetches.Load(); got != 2 {
-		t.Fatalf("image fetch count = %d, want 2", got)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
 	}
 }
