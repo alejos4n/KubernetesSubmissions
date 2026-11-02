@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-output
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: log-output
+  template:
+    metadata:
+      labels:
+        app: log-output
+    spec:
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: log-writer
+          image: alejosan/log-output:latest
+          imagePullPolicy: Always
+          args: ["writer"]
+          volumeMounts:
+            - name: log-data
+              mountPath: /data
+        - name: log-server
+          image: alejosan/log-output:latest
+          imagePullPolicy: Always
+          args: ["server"]
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: log-data
+              mountPath: /data
+              readOnly: true
+      volumes:
+        - name: log-data
+          emptyDir: {}
