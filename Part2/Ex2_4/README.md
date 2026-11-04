@@ -18,11 +18,12 @@ docker push alejosan/todo-backend:2.2
 
 ## Deploy
 
-Project resources use the dedicated `project` namespace. The image cache continues to use the local PersistentVolume, which is cluster-scoped. Adjust the node name and host path in `persistentvolume/persistentvolume.yaml` for your cluster, prepare that directory on the node, and create the namespace before applying the PV and application resources:
+Project resources use the dedicated `project` namespace. The image cache uses a cluster-scoped local PersistentVolume and a static StorageClass (also cluster-scoped). Adjust the node name and host path in `persistentvolume/persistentvolume.yaml` for your cluster and prepare that directory on the node. Apply the namespace, StorageClass, and PV before the application resources:
 
 ```sh
-kubectl apply -f namespace.yaml
-kubectl apply -f persistentvolume/
+kubectl apply -f manifests/namespace.yaml
+kubectl apply -f persistentvolume/storageclass.yaml
+kubectl apply -f persistentvolume/persistentvolume.yaml
 kubectl apply -f manifests/
 ```
 
