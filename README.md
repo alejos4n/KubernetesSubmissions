@@ -35,14 +35,16 @@ This repo was created while taking "Devops with Kubernetes" course, that is prov
 
 ## Part 2
 
+Non-project exercise applications use the shared `exercises` namespace; project applications use the separate `project` namespace. Create the appropriate namespace before deploying their manifests. Course material outside the exercises can continue to use the default namespace.
+
 ### 1. Networking between pods
 
 - [Exercise 2.01: Connecting pods](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
-- [Exercise 2.02: Project v1.0](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+- [Exercise 2.02: Project v1.0](https://github.com/alejos4n/KubernetesSubmissions/tree/2.2)
 
 ### 2. Organizing a cluster
 
-- [Exercise 2.03: Keep them separated](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
+- [Exercise 2.03: Keep them separated](https://github.com/alejos4n/KubernetesSubmissions/tree/2.3)
 - [Exercise 2.04: Project v1.1](https://github.com/alejos4n/KubernetesSubmissions/tree/2.1)
 
 ### 3. Configuring applications
