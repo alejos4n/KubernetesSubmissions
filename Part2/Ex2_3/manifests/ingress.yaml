@@ -1,22 +1,23 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: todo-app
+  name: applications
+  namespace: exercises
 spec:
   rules:
     - http:
         paths:
-          - path: /todos
+          - path: /pingpong
             pathType: Prefix
             backend:
               service:
-                name: todo-backend
+                name: ping-pong
                 port:
                   number: 80
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: todo-app
+                name: log-output
                 port:
                   number: 80

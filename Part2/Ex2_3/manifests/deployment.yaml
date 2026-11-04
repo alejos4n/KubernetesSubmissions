@@ -1,58 +1,47 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: todo-app
+  name: log-output
+  namespace: exercises
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: todo-app
+      app: log-output
   template:
     metadata:
       labels:
-        app: todo-app
+        app: log-output
     spec:
-      securityContext:
-        fsGroup: 65532
       containers:
-        - name: todo-app
-          image: alejosan/todo-app:2.2
+        - name: log-output
+          image: alejosan/log-output:2.1
           imagePullPolicy: Always
           env:
-            - name: PORT
-              value: "8080"
-            - name: DATA_DIR
-              value: /data
-            - name: TODO_BACKEND_URL
-              value: http://todo-backend/todos
+            - name: PINGPONG_URL
+              value: http://ping-pong.exercises.svc.cluster.local/pings
           ports:
             - name: http
               containerPort: 8080
-          volumeMounts:
-            - name: image-cache
-              mountPath: /data
-      volumes:
-        - name: image-cache
-          persistentVolumeClaim:
-            claimName: todo-app-image-cache
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: todo-backend
+  name: ping-pong
+  namespace: exercises
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: todo-backend
+      app: ping-pong
   template:
     metadata:
       labels:
-        app: todo-backend
+        app: ping-pong
     spec:
       containers:
-        - name: todo-backend
-          image: alejosan/todo-backend:2.2
+        - name: ping-pong
+          image: alejosan/pingpong:2.1
           imagePullPolicy: Always
           ports:
             - name: http

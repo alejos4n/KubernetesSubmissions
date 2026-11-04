@@ -1,376 +1,146 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
-const imageTTL = 10 * time.Minute
-
-const homePage = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Todo app</title>
-<style>
-body { font: 1rem system-ui, sans-serif; margin: 0 auto; max-width: 48rem; padding: 1rem; }
-img { height: auto; max-width: 100%; }
-form { display: flex; gap: .5rem; margin: 1rem 0; }
-input { flex: 1; min-width: 0; padding: .6rem; }
-button { padding: .6rem 1rem; }
-#todo-error { color: #b00020; }
-</style>
-</head>
-<body>
-<main>
-<h1>Todo app</h1>
-<img src="/image" alt="Random image from Lorem Picsum">
-<form id="todo-form">
-<label for="todo">New todo</label>
-<input id="todo" name="todo" type="text" maxlength="140" required>
-<button type="submit">Send</button>
-</form>
-<p id="todo-error" role="alert"></p>
-<h2>Todos</h2>
-<ul>
-{{range .}}<li>{{.}}</li>
-{{else}}<li>No todos yet</li>{{end}}
-</ul>
-</main>
-<script>
-document.getElementById("todo-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const input = document.getElementById("todo");
-  const error = document.getElementById("todo-error");
-  error.textContent = "";
-  try {
-    const response = await fetch("/todos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ todo: input.value })
-    });
-    if (!response.ok) {
-      error.textContent = await response.text();
-      return;
-    }
-    window.location.reload();
-  } catch (requestError) {
-    error.textContent = "Could not save todo. Please try again.";
-  }
-});
-</script>
-</body>
-</html>`
-
-var pageTemplate = template.Must(template.New("home").Parse(homePage))
-
-type cacheState struct {
-	FetchedAt   time.Time `json:"fetched_at"`
-	StaleServed bool      `json:"stale_served"`
+type logOutput struct {
+	value       string
+	pingPongURL string
+	client      *http.Client
+	mu          sync.RWMutex
+	line        string
 }
 
-type imageCache struct {
-	dir      string
-	imageURL string
-	client   *http.Client
-	now      func() time.Time
-	mu       sync.Mutex
-}
-
-func newImageCache(dir, imageURL string) *imageCache {
-	return &imageCache{
-		dir:      dir,
-		imageURL: imageURL,
-		client:   &http.Client{Timeout: 30 * time.Second},
-		now:      time.Now,
-	}
-}
-
-func fetchTodos(ctx context.Context, client *http.Client, backendURL string) ([]string, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, backendURL, nil)
+func newLogOutput(pingPongURL string) (*logOutput, error) {
+	value, err := randomUUID()
 	if err != nil {
-		return nil, fmt.Errorf("create todo backend request: %w", err)
+		return nil, err
 	}
-	response, err := client.Do(request)
+	output := &logOutput{
+		value:       value,
+		pingPongURL: pingPongURL,
+		client:      &http.Client{Timeout: 2 * time.Second},
+	}
+	output.updateLine()
+	return output, nil
+}
+
+func (o *logOutput) updateLine() {
+	line := fmt.Sprintf("%s: %s.", time.Now().UTC().Format("2006-01-02T15:04:05.000Z"), o.value)
+	o.mu.Lock()
+	o.line = line
+	o.mu.Unlock()
+}
+
+func (o *logOutput) latestLine() string {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.line
+}
+
+func (o *logOutput) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	request, err := http.NewRequestWithContext(r.Context(), http.MethodGet, o.pingPongURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("fetch todos: %w", err)
+		http.Error(w, "invalid Ping-pong URL", http.StatusInternalServerError)
+		return
+	}
+	response, err := o.client.Do(request)
+	if err != nil {
+		log.Printf("request Ping-pong count: %v", err)
+		http.Error(w, "Ping-pong service is unavailable", http.StatusServiceUnavailable)
+		return
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch todos: unexpected status %s", response.Status)
+		log.Printf("Ping-pong count request returned %s", response.Status)
+		http.Error(w, "Ping-pong service returned an error", http.StatusBadGateway)
+		return
 	}
 
-	var todos []string
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&todos); err != nil {
-		return nil, fmt.Errorf("decode todos: %w", err)
-	}
-	return todos, nil
-}
-
-func todoProxyHandler(client *http.Client, backendURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			todos, err := fetchTodos(r.Context(), client, backendURL)
-			if err != nil {
-				log.Printf("fetch todos: %v", err)
-				http.Error(w, "todo service is unavailable", http.StatusServiceUnavailable)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			if err := json.NewEncoder(w).Encode(todos); err != nil {
-				log.Printf("write todos response: %v", err)
-			}
-		case http.MethodPost:
-			request, err := http.NewRequestWithContext(r.Context(), http.MethodPost, backendURL, r.Body)
-			if err != nil {
-				log.Printf("create todo request: %v", err)
-				http.Error(w, "todo service is unavailable", http.StatusServiceUnavailable)
-				return
-			}
-			request.Header.Set("Content-Type", r.Header.Get("Content-Type"))
-			response, err := client.Do(request)
-			if err != nil {
-				log.Printf("create todo: %v", err)
-				http.Error(w, "todo service is unavailable", http.StatusServiceUnavailable)
-				return
-			}
-			defer response.Body.Close()
-			if contentType := response.Header.Get("Content-Type"); contentType != "" {
-				w.Header().Set("Content-Type", contentType)
-			}
-			w.WriteHeader(response.StatusCode)
-			if _, err := io.Copy(w, io.LimitReader(response.Body, 4<<10)); err != nil {
-				log.Printf("write create todo response: %v", err)
-			}
-		default:
-			w.Header().Set("Allow", "GET, POST")
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}
-}
-
-func (c *imageCache) imagePath() string {
-	return filepath.Join(c.dir, "image.jpg")
-}
-
-func (c *imageCache) statePath() string {
-	return filepath.Join(c.dir, "state.json")
-}
-
-func (c *imageCache) get() ([]byte, bool, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	image, imageErr := os.ReadFile(c.imagePath())
-	stateData, stateErr := os.ReadFile(c.statePath())
-	if errors.Is(imageErr, os.ErrNotExist) && errors.Is(stateErr, os.ErrNotExist) {
-		freshImage, err := c.fetch()
-		if err != nil {
-			return nil, false, err
-		}
-		if err := c.store(freshImage, cacheState{FetchedAt: c.now().UTC()}); err != nil {
-			return nil, false, err
-		}
-		return freshImage, false, nil
-	}
-	if imageErr != nil {
-		return nil, false, fmt.Errorf("read cached image: %w", imageErr)
-	}
-	if stateErr != nil {
-		return nil, false, fmt.Errorf("read image cache state: %w", stateErr)
-	}
-
-	var state cacheState
-	if err := json.Unmarshal(stateData, &state); err != nil {
-		return nil, false, fmt.Errorf("decode image cache state: %w", err)
-	}
-	if state.FetchedAt.IsZero() {
-		return nil, false, errors.New("image cache state has no fetch timestamp")
-	}
-	if c.now().Sub(state.FetchedAt) < imageTTL {
-		return image, false, nil
-	}
-	if !state.StaleServed {
-		state.StaleServed = true
-		if err := c.writeState(state); err != nil {
-			return nil, false, err
-		}
-		return image, true, nil
-	}
-
-	freshImage, err := c.fetch()
+	count, err := io.ReadAll(io.LimitReader(response.Body, 32))
 	if err != nil {
-		return image, true, err
+		log.Printf("read Ping-pong count: %v", err)
+		http.Error(w, "could not read Ping-pong count", http.StatusBadGateway)
+		return
 	}
-	if err := c.store(freshImage, cacheState{FetchedAt: c.now().UTC()}); err != nil {
-		return nil, false, err
+	countValue := strings.TrimSpace(string(count))
+	if countValue == "" {
+		http.Error(w, "Ping-pong returned an empty count", http.StatusBadGateway)
+		return
 	}
-	return freshImage, false, nil
-}
-
-func (c *imageCache) fetch() ([]byte, error) {
-	request, err := http.NewRequest(http.MethodGet, c.imageURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create image request: %w", err)
-	}
-	response, err := c.client.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("download image: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download image: unexpected status %s", response.Status)
+	if _, err := strconv.ParseUint(countValue, 10, 64); err != nil {
+		log.Printf("invalid Ping-pong count %q: %v", countValue, err)
+		http.Error(w, "Ping-pong returned an invalid count", http.StatusBadGateway)
+		return
 	}
 
-	const maxImageSize = 20 << 20
-	image, err := io.ReadAll(io.LimitReader(response.Body, maxImageSize+1))
-	if err != nil {
-		return nil, fmt.Errorf("read downloaded image: %w", err)
-	}
-	if len(image) == 0 || len(image) > maxImageSize {
-		return nil, fmt.Errorf("downloaded image size is invalid: %d bytes", len(image))
-	}
-	return image, nil
-}
-
-func (c *imageCache) store(image []byte, state cacheState) error {
-	if err := os.MkdirAll(c.dir, 0755); err != nil {
-		return fmt.Errorf("create image cache directory: %w", err)
-	}
-	imageTemp := c.imagePath() + ".tmp"
-	if err := os.WriteFile(imageTemp, image, 0644); err != nil {
-		return fmt.Errorf("write cached image: %w", err)
-	}
-	if err := os.Rename(imageTemp, c.imagePath()); err != nil {
-		return fmt.Errorf("publish cached image: %w", err)
-	}
-	return c.writeState(state)
-}
-
-func (c *imageCache) writeState(state cacheState) error {
-	data, err := json.Marshal(state)
-	if err != nil {
-		return fmt.Errorf("encode image cache state: %w", err)
-	}
-	if err := os.MkdirAll(c.dir, 0755); err != nil {
-		return fmt.Errorf("create image cache directory: %w", err)
-	}
-	stateTemp := c.statePath() + ".tmp"
-	if err := os.WriteFile(stateTemp, data, 0644); err != nil {
-		return fmt.Errorf("write image cache state: %w", err)
-	}
-	if err := os.Rename(stateTemp, c.statePath()); err != nil {
-		return fmt.Errorf("publish image cache state: %w", err)
-	}
-	return nil
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprintf(w, "%s\nPing / Pongs: %s\n", o.latestLine(), countValue)
 }
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	pingPongURL := os.Getenv("PINGPONG_URL")
+	if pingPongURL == "" {
+		pingPongURL = "http://ping-pong/pings"
 	}
-	if _, err := strconv.Atoi(port); err != nil {
-		log.Fatalf("invalid PORT %q: %v", port, err)
+	output, err := newLogOutput(pingPongURL)
+	if err != nil {
+		log.Fatalf("create log output: %v", err)
 	}
-	dataDir := os.Getenv("DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/data"
-	}
-	imageURL := os.Getenv("IMAGE_URL")
-	if imageURL == "" {
-		imageURL = "https://picsum.photos/1200"
-	}
-	todoBackendURL := os.Getenv("TODO_BACKEND_URL")
-	if todoBackendURL == "" {
-		todoBackendURL = "http://todo-backend/todos"
-	}
-	todoClient := &http.Client{Timeout: 3 * time.Second}
 
-	cache := newImageCache(dataDir, imageURL)
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	go func() {
+		for range ticker.C {
+			output.updateLine()
+		}
+	}()
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/image", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		image, stale, err := cache.get()
-		if err != nil && image == nil {
-			log.Printf("get cached image: %v", err)
-			http.Error(w, "image is unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		if err != nil {
-			log.Printf("refresh cached image: %v", err)
-		}
-		if stale {
-			w.Header().Set("Warning", `110 - "Response is stale"`)
-		}
-		w.Header().Set("Content-Type", "image/jpeg")
-		w.Header().Set("Cache-Control", "no-store")
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write(image); err != nil {
-			log.Printf("write image response: %v", err)
-		}
-	})
-	mux.HandleFunc("/todos", todoProxyHandler(todoClient, todoBackendURL))
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		todos, err := fetchTodos(r.Context(), todoClient, todoBackendURL)
-		if err != nil {
-			log.Printf("fetch todos: %v", err)
-			http.Error(w, "todo service is unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		if err := pageTemplate.Execute(w, todos); err != nil {
-			log.Printf("write page response: %v", err)
-		}
-	})
-
-	server := &http.Server{Addr: net.JoinHostPort("", port), Handler: mux}
-	if strings.EqualFold(os.Getenv("ENABLE_SHUTDOWN"), "true") {
-		mux.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			fmt.Fprintln(w, "shutting down")
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				if err := server.Shutdown(ctx); err != nil {
-					log.Printf("shut down HTTP server: %v", err)
-				}
-			}()
-		})
-	}
-
-	log.Printf("Server started on port %s", port)
+	mux.HandleFunc("/", output.serveHTTP)
+	server := &http.Server{Addr: ":8080", Handler: mux}
+	log.Printf("Log output listening on :8080")
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("serve HTTP requests: %v", err)
+		log.Fatalf("serve Log output: %v", err)
 	}
+}
+
+func randomUUID() (string, error) {
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return "", fmt.Errorf("generate random UUID: %w", err)
+	}
+
+	id[6] = (id[6] & 0x0f) | 0x40
+	id[8] = (id[8] & 0x3f) | 0x80
+
+	encoded := make([]byte, 36)
+	hex.Encode(encoded[0:8], id[0:4])
+	encoded[8] = '-'
+	hex.Encode(encoded[9:13], id[4:6])
+	encoded[13] = '-'
+	hex.Encode(encoded[14:18], id[6:8])
+	encoded[18] = '-'
+	hex.Encode(encoded[19:23], id[8:10])
+	encoded[23] = '-'
+	hex.Encode(encoded[24:36], id[10:16])
+
+	return string(encoded), nil
 }
