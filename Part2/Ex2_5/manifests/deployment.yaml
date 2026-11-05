@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-output
+  namespace: exercises
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: log-output
+  template:
+    metadata:
+      labels:
+        app: log-output
+    spec:
+      containers:
+        - name: log-output
+          image: alejosan/log-output:2.2
+          imagePullPolicy: Always
+          env:
+            - name: PINGPONG_URL
+              value: http://ping-pong.exercises.svc.cluster.local/pings
+            - name: MESSAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: log-output-config
+                  key: MESSAGE
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: log-output-config
+              mountPath: /etc/log-output
+              readOnly: true
+      volumes:
+        - name: log-output-config
+          configMap:
+            name: log-output-config
+            items:
+              - key: information.txt
+                path: information.txt
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ping-pong
+  namespace: exercises
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ping-pong
+  template:
+    metadata:
+      labels:
+        app: ping-pong
+    spec:
+      containers:
+        - name: ping-pong
+          image: alejosan/pingpong:2.1
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
