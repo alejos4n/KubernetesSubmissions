@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-app
+  namespace: project
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: todo-app
+  template:
+    metadata:
+      labels:
+        app: todo-app
+    spec:
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: todo-app
+          image: alejosan/todo-app:2.3
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: todo-app-config
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: image-cache
+              mountPath: /data
+      volumes:
+        - name: image-cache
+          persistentVolumeClaim:
+            claimName: todo-app-image-cache
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-backend
+  namespace: project
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: todo-backend
+  template:
+    metadata:
+      labels:
+        app: todo-backend
+    spec:
+      containers:
+        - name: todo-backend
+          image: alejosan/todo-backend:2.3
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: todo-app-config
+          ports:
+            - name: http
+              containerPort: 8080
