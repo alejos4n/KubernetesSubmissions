@@ -50,11 +50,32 @@ spec:
     spec:
       containers:
         - name: todo-backend
-          image: alejosan/todo-backend:2.3
+          image: alejosan/todo-backend:2.4
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
                 name: todo-app-config
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: todo-postgres-credentials
+                  key: password
           ports:
             - name: http
               containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /todos
+              port: http
+            periodSeconds: 5
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          envFrom:
+            - configMapRef:
+                name: todo-app-config
+          command:
+            - sh
+            - -c
+            - until pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do echo "waiting for PostgreSQL"; sleep 2; done

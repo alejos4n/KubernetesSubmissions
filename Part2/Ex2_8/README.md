@@ -1,11 +1,11 @@
-# Todo app and in-memory backend
+# Todo app and PostgreSQL backend
 
-The todo app keeps the persistent Lorem Picsum image cache, fetches todos from `todo-backend` when rendering the page, and submits new todos to `POST /todos`. The backend exposes `GET /todos` and `POST /todos`, stores items in memory, and starts with the sample todos from the previous exercise. New items are limited to 140 characters.
+The todo app keeps the persistent Lorem Picsum image cache, fetches todos from `todo-backend` when rendering the page, and submits new todos to `POST /todos`. The backend exposes `GET /todos` and `POST /todos` and saves todos in PostgreSQL. The database runs as a one-replica StatefulSet with a persistent volume claim. On first startup, the backend creates the table and seeds the sample todos; later restarts retain the saved todos. New items are limited to 140 characters.
 
-Runtime settings—including listen ports, service URLs, image URL, cache path and timing values—are supplied to both pods through the `todo-app-config` ConfigMap. Update the ConfigMap to change these settings; the app containers have no built-in runtime defaults. Since Kubernetes does not update environment variables in running containers, restart the deployments after changing the ConfigMap:
+Runtime settings—including listen ports, service URLs, image URL, cache path, timing values and PostgreSQL connection settings—are supplied through the `todo-app-config` ConfigMap. The PostgreSQL password is supplied through the `todo-postgres-credentials` Secret. Update configuration as needed; the app containers have no built-in runtime defaults. Since Kubernetes does not update environment variables in running containers, restart the deployments after changing the ConfigMap or Secret:
 
 ```sh
-kubectl rollout restart -n project deployment/todo-app deployment/todo-backend
+kubectl rollout restart -n project deployment/todo-app deployment/todo-backend statefulset/todo-postgres
 ```
 
 The Ingress sends `/todos` requests from the browser to the backend and all other paths (including `/` and `/image`) to the todo app. The todo app talks to the backend over the in-cluster `todo-backend` Service.
@@ -18,8 +18,8 @@ From this directory:
 docker build -t alejosan/todo-app:2.3 app/
 docker push alejosan/todo-app:2.3
 
-docker build -t alejosan/todo-backend:2.3 todo-backend/
-docker push alejosan/todo-backend:2.3
+docker build -t alejosan/todo-backend:2.4 todo-backend/
+docker push alejosan/todo-backend:2.4
 ```
 
 ## Deploy
@@ -34,6 +34,8 @@ kubectl apply -f manifests/
 ```
 
 If a previous local PV is stuck Released and the claim remains Pending, remove and recreate the PV after confirming it is safe to do so and that the image-cache data can be discarded. Then re-apply the claim and application manifests.
+
+The database has its own 1 GiB claim created by the StatefulSet. The database password in `manifests/todo-postgres-secret.yaml` is for local exercise use only; replace it with a suitably managed secret outside a local development cluster. Deleting the database claim permanently deletes the saved todos.
 
 Access the app through the Ingress, or use:
 
