@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: todo-app-config
+  namespace: project
+data:
+  PORT: "8080"
+  DATA_DIR: /data
+  IMAGE_URL: https://picsum.photos/1200
+  TODO_BACKEND_URL: http://todo-backend.project.svc.cluster.local:80/todos
+  IMAGE_CACHE_TTL: 10m
+  IMAGE_REQUEST_TIMEOUT: 30s
+  TODO_REQUEST_TIMEOUT: 3s
+  SHUTDOWN_TIMEOUT: 5s
+  ENABLE_SHUTDOWN: "false"
