@@ -1,0 +1,69 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: random-wikipedia-todo
+  namespace: project
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 120
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: create-todo
+              image: python:3.12-alpine
+              command:
+                - python3
+                - -c
+                - |
+                  import json
+                  import os
+                  from urllib.error import HTTPError
+                  from urllib.parse import urljoin, urlparse
+                  from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+
+                  random_url = "https://en.wikipedia.org/wiki/Special:Random"
+
+                  class NoRedirect(HTTPRedirectHandler):
+                      def redirect_request(self, request, response, code, message, headers, new_url):
+                          return None
+
+                  request = Request(random_url, headers={"User-Agent": "KubernetesTodoReminder/1.0"})
+                  try:
+                      with build_opener(NoRedirect).open(request, timeout=20) as response:
+                          raise RuntimeError(f"expected Wikipedia redirect, got HTTP {response.status}")
+                  except HTTPError as response:
+                      if not 300 <= response.code < 400:
+                          raise
+                      location = response.headers.get("Location")
+                      response.close()
+                      if not location:
+                          raise RuntimeError("Wikipedia redirect did not include a Location header")
+
+                  article_url = urljoin(random_url, location)
+                  parsed_url = urlparse(article_url)
+                  if parsed_url.scheme != "https" or parsed_url.hostname != "en.wikipedia.org" or not parsed_url.path.startswith("/wiki/"):
+                      raise RuntimeError(f"unexpected Wikipedia article URL: {article_url}")
+
+                  payload = json.dumps({"todo": f"Read {article_url}"}).encode()
+                  todo_request = Request(
+                      os.environ["TODO_BACKEND_URL"],
+                      data=payload,
+                      headers={"Content-Type": "application/json", "User-Agent": "KubernetesTodoReminder/1.0"},
+                      method="POST",
+                  )
+                  with urlopen(todo_request, timeout=20) as response:
+                      if not 200 <= response.status < 300:
+                          raise RuntimeError(f"todo backend returned HTTP {response.status}")
+                      print(f"Created todo: Read {article_url}")
+              envFrom:
+                - configMapRef:
+                    name: todo-app-config
